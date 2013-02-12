@@ -1,0 +1,118 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+
+import os
+import os.path
+import subprocess
+import sys
+import time
+
+
+# TODO: REWORK?
+def _collect(path):
+    prefix = 'Static files monitor (pid=%d):' % os.getpid()
+    print >> sys.stderr, '%s Change detected to \'%s\'.' % (prefix, path)
+    print >> sys.stderr, '%s Triggering `collectstatic`.' % prefix
+    subprocess.check_call(['./manage.py', 'collectstatic', '--noinput'])
+
+
+# TODO: REWORK?
+def _find_settings_module(root=None):
+    if root is None:
+        root = os.getcwd()
+
+    for dn in [e for e in os.listdir(root) if os.path.isdir(os.path.join(root, e))]:
+        dp = os.path.join(root, dn)
+
+        for fn in [e for e in os.listdir(dp) if os.path.isfile(os.path.join(dp, e))]:
+            if fn == 'settings.py':
+                return '%s.settings' % dn
+
+
+# TODO: use regexp validator? plugins? *_flymake.*?
+def _is_ignored(f):
+    f = os.path.split(f)[-1]
+    return f.startswith('.')
+
+
+def _list_files(root):
+    files = set()
+
+    for t in os.walk(root):
+
+        if _is_ignored(t[0]):
+            continue
+
+        for fn in t[2]:
+            fp = os.path.join(t[0], fn)
+
+            if _is_ignored(fp):
+                continue
+
+            files.add(fp)
+
+    return files
+
+
+def _modified(path, times):
+    if not os.path.isfile(path):
+        return path in times
+
+    try:
+        mtime = os.stat(path).st_mtime
+    except OSError:
+        return True
+
+    if path not in times:
+        times[path] = mtime
+        return False
+
+    ret = mtime != times[path]
+    times[path] = mtime     # update
+    return ret
+
+
+class Monitor(object):
+    _times = {}
+
+    def __init__(self, dirs=None, interval=1.0):
+        if dirs is None:
+            dirs = settings.STATICFILES_DIRS
+        self._dirs = dirs
+        self._interval = interval
+
+    def start(self):
+        prefix = 'Static files monitor (pid=%d):' % os.getpid()
+        print >> sys.stderr, '%s Starting...' % (prefix)
+        self._monitor()
+
+    def track(self, path):
+        self._dirs.add(path)
+
+    def _monitor(self):
+
+        def inner():
+            for path in self._dirs:
+                for fp in _list_files(path):
+                    if _modified(fp, self._times):
+                        _collect(fp)
+                        print '\a'
+                        return
+
+        while 1:
+            inner()
+            time.sleep(self._interval)
+
+
+if __name__ == '__main__':
+
+    # TODO: arguments...
+    m = _find_settings_module()
+    if m is None:
+        sys.exit('Cannot find DJANGO_SETTINGS_MODULE.')
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", m)
+    from django.conf import settings
+
+    monitor = Monitor()
+    monitor.start()
