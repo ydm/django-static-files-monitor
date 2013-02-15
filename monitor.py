@@ -52,17 +52,13 @@ def _list_files(root):
     files = set()
 
     for t in os.walk(root):
-
         if _is_ignored(t[0]):
             continue
 
         for fn in t[2]:
             fp = os.path.join(t[0], fn)
-
-            if _is_ignored(fp):
-                continue
-
-            files.add(fp)
+            if not _is_ignored(fp):
+                files.add(fp)
 
     return files
 
@@ -89,8 +85,6 @@ class Monitor(object):
     _times = {}
 
     def __init__(self, dirs=None, interval=1.0):
-        if dirs is None:
-            dirs = settings.STATICFILES_DIRS
         self._dirs = dirs
         self._interval = interval
 
@@ -117,8 +111,7 @@ class Monitor(object):
             time.sleep(self._interval)
 
 
-if __name__ == '__main__':
-
+def main():
     # TODO: arguments...
     m = _find_settings_module()
     if m is None:
@@ -127,5 +120,9 @@ if __name__ == '__main__':
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", m)
     from django.conf import settings
 
-    monitor = Monitor()
+    monitor = Monitor(settings.STATICFILES_DIRS)
     monitor.start()
+
+
+if __name__ == '__main__':
+    main()
