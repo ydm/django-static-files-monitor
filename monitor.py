@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import unicode_literals
+
 import os
 import os.path
 import subprocess
@@ -23,9 +25,10 @@ import time
 
 # TODO: REWORK?
 def _collect(path):
-    prefix = 'Static files monitor (pid=%d):' % os.getpid()
-    print >> sys.stderr, '%s Change detected to \'%s\'.' % (prefix, path)
-    print >> sys.stderr, '%s Triggering `collectstatic`.' % prefix
+    prefix = 'Static files monitor (pid={}):'.format(os.getpid())
+    print >> sys.stderr, "{} Change detected to '{}'.".format(prefix, path)
+    print >> sys.stderr, "{} Change detected to '{}'.".format(prefix, path)
+    print >> sys.stderr, '%s Triggering `collectstatic`.'.format(prefix)
     subprocess.check_call(['./manage.py', 'collectstatic', '--noinput'])
 
 
@@ -103,7 +106,7 @@ class Monitor(object):
                 for fp in _list_files(path):
                     if _modified(fp, self._times):
                         _collect(fp)
-                        print '\a'
+                        print('\a')
                         return
 
         while 1:
@@ -120,7 +123,7 @@ def main():
     if m is None:
         sys.exit('Cannot find DJANGO_SETTINGS_MODULE.')
 
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", m)
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', m)
     from django.conf import settings
 
     monitor = Monitor(settings.STATICFILES_DIRS)
