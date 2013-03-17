@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # This program is free software: you can redistribute it and/or modify
@@ -21,15 +21,71 @@ import os.path
 import subprocess
 import sys
 import time
+import threading
+
+from importlib import import_module
+
+from six import print_
 
 
-# TODO: REWORK?
-def _collect(path):
-    prefix = 'Static files monitor (pid={}):'.format(os.getpid())
-    print >> sys.stderr, "{} Change detected to '{}'.".format(prefix, path)
-    print >> sys.stderr, "{} Change detected to '{}'.".format(prefix, path)
-    print >> sys.stderr, '%s Triggering `collectstatic`.'.format(prefix)
-    subprocess.check_call(['./manage.py', 'collectstatic', '--noinput'])
+class Future(object):
+
+    def __init__(self, func, wait=0, *args, **kwargs):
+        self._cancelled = False
+        self._wait = wait
+
+        self._work  = threading.Lock()
+        self._thread = threading.Thread(target=self._locked(func),
+                                        args=args, kwargs=kwargs)
+        self._result = None
+
+        # Configurable autostart?
+        self.start()
+
+    def _locked(self, func):
+        def wrapper(*args, **kwargs):
+            self._work.acquire()
+
+            if self._wait > 0:
+                time.sleep(self._wait)
+
+            if not self._cancelled:
+                self._result = func(*args, **kwargs)
+
+            self._work.release()
+
+        return wrapper
+
+    def __call__(self):
+        # Block until the lock is acquired
+        self._work.acquire()
+        self._work.release()
+        return self._result
+
+    def start(self):
+        return self._thread.start()
+
+    def cancel(self):
+        self._cancelled = True
+
+
+class Collector(object):
+
+    def __init__(self):
+        self._f = None
+
+    def _do(self, path):
+        prefix = 'Static files monitor (pid={}):'.format(os.getpid())
+        print_("{} Change detected to '{}'.".format(prefix, path), file=sys.stderr)
+        print_("{} Change detected to '{}'.".format(prefix, path), file=sys.stderr)
+        print_('{} Triggering `collectstatic`.'.format(prefix), file=sys.stderr)
+        subprocess.check_call(['./manage.py', 'collectstatic', '--noinput'])
+        print_('\a')            # a simple signal that the task is done
+
+    def collect(self, path, wait=2):
+        if self._f is not None:
+            self._f.cancel()
+        self._f = Future(self._do, wait, path)
 
 
 # TODO: REWORK?
@@ -85,15 +141,17 @@ def _modified(path, times):
 
 
 class Monitor(object):
-    _times = {}
 
     def __init__(self, dirs=None, interval=1.0):
         self._dirs = dirs
         self._interval = interval
 
+        self._times = {}
+        self._collector = Collector()
+
     def start(self):
         prefix = 'Static files monitor (pid=%d):' % os.getpid()
-        print >> sys.stderr, '%s Starting...' % (prefix)
+        print_('{} Starting...'.format(prefix), file=sys.stderr)
         self._monitor()
 
     def track(self, path):
@@ -105,8 +163,7 @@ class Monitor(object):
             for path in self._dirs:
                 for fp in _list_files(path):
                     if _modified(fp, self._times):
-                        _collect(fp)
-                        print('\a')
+                        self._collector.collect(fp)
                         return
 
         while 1:
@@ -123,9 +180,7 @@ def main():
     if m is None:
         sys.exit('Cannot find DJANGO_SETTINGS_MODULE.')
 
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', m)
-    from django.conf import settings
-
+    settings = import_module(m)
     monitor = Monitor(settings.STATICFILES_DIRS)
     monitor.start()
 
