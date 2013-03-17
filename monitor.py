@@ -112,6 +112,9 @@ class Monitor(object):
 
 
 def main():
+    # add cwd to sys.path
+    sys.path.append(os.getcwd())
+
     # TODO: arguments...
     m = _find_settings_module()
     if m is None:
