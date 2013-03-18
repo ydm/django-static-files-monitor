@@ -16,14 +16,13 @@
 
 from __future__ import unicode_literals
 
+import importlib
 import os
 import os.path
 import subprocess
 import sys
-import time
 import threading
-
-from importlib import import_module
+import time
 
 from six import print_
 
@@ -31,7 +30,7 @@ from six import print_
 class Future(object):
 
     def __init__(self, func, wait=0, *args, **kwargs):
-        self._cancelled = False
+        self._cancel = threading.Event()
         self._wait = wait
 
         self._work  = threading.Lock()
@@ -45,28 +44,38 @@ class Future(object):
     def _locked(self, func):
         def wrapper(*args, **kwargs):
             self._work.acquire()
+            try:
+                if self._wait > 0:
+                    self._cancel.wait(self._wait)
 
-            if self._wait > 0:
-                time.sleep(self._wait)
+                cancel = self._cancel.is_set()
 
-            if not self._cancelled:
-                self._result = func(*args, **kwargs)
+                # Now it's impossible to cancel the task
+                self._cancel.set()
 
-            self._work.release()
+                if not cancel:
+                    self._result = func(*args, **kwargs)
+            finally:
+                self._work.release()
 
         return wrapper
 
     def __call__(self):
         # Block until the lock is acquired
         self._work.acquire()
-        self._work.release()
-        return self._result
+        try:
+            return self._result
+        finally:
+            self._work.release()
 
     def start(self):
         return self._thread.start()
 
     def cancel(self):
-        self._cancelled = True
+        if self._cancel.is_set():
+            return False
+        self._cancel.set()
+        return True
 
 
 class Collector(object):
@@ -178,7 +187,7 @@ def main():
     if m is None:
         sys.exit('Cannot find DJANGO_SETTINGS_MODULE.')
 
-    settings = import_module(m)
+    settings = importlib.import_module(m)
     monitor = Monitor(settings.STATICFILES_DIRS)
     monitor.start()
 
