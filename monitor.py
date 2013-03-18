@@ -77,10 +77,9 @@ class Collector(object):
     def _do(self, path):
         prefix = 'Static files monitor (pid={}):'.format(os.getpid())
         print_("{} Change detected to '{}'.".format(prefix, path), file=sys.stderr)
-        print_("{} Change detected to '{}'.".format(prefix, path), file=sys.stderr)
         print_('{} Triggering `collectstatic`.'.format(prefix), file=sys.stderr)
         subprocess.check_call(['./manage.py', 'collectstatic', '--noinput'])
-        print_('\a')            # a simple signal that the task is done
+        print_('\a')           # a simple signal that the task is done
 
     def collect(self, path, wait=2):
         if self._f is not None:
@@ -122,32 +121,14 @@ def _list_files(root):
     return files
 
 
-def _modified(path, times):
-    if not os.path.isfile(path):
-        return path in times
-
-    try:
-        mtime = os.stat(path).st_mtime
-    except OSError:
-        return True
-
-    if path not in times:
-        times[path] = mtime
-        return False
-
-    ret = mtime != times[path]
-    times[path] = mtime     # update
-    return ret
-
-
 class Monitor(object):
 
     def __init__(self, dirs=None, interval=1.0):
         self._dirs = dirs
         self._interval = interval
 
-        self._times = {}
         self._collector = Collector()
+        self._times = {}
 
     def start(self):
         prefix = 'Static files monitor (pid=%d):' % os.getpid()
@@ -157,12 +138,29 @@ class Monitor(object):
     def track(self, path):
         self._dirs.add(path)
 
+    def _modified(self, path):
+        if not os.path.isfile(path):
+            return path in self._times
+    
+        try:
+            mtime = os.stat(path).st_mtime
+        except OSError:
+            return True
+    
+        if path not in self._times:
+            self._times[path] = mtime
+            return False
+    
+        ret = mtime != self._times[path]
+        self._times[path] = mtime # update
+        return ret
+
     def _monitor(self):
 
         def inner():
             for path in self._dirs:
                 for fp in _list_files(path):
-                    if _modified(fp, self._times):
+                    if self._modified(fp):
                         self._collector.collect(fp)
                         return
 
