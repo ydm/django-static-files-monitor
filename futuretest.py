@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 import time
 import unittest
 
-from monitor import Future
+import monitor
 
 
 class FutureTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class FutureTest(unittest.TestCase):
             return arg            
 
         begin = time.time()
-        f = Future(worker, 2, 1000)
+        f = monitor.Future(worker, 2, 1000)
         actual = f()
         end = time.time()
 
@@ -30,7 +30,7 @@ class FutureTest(unittest.TestCase):
             nonlocal is_executed
             is_executed = True
         
-        f = Future(worker, 2)
+        f = monitor.Future(worker, 2)
         time.sleep(1)
         f.cancel()
 
