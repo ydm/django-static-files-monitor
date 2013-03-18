@@ -8,10 +8,10 @@ settings.STATICFILES_DIRS directories.
 Usage
 -----
 1. Add monitor.py to PATH  
-2. cd the/directory/that/contains/the/manage/py/file
+2. cd the/project/directory/that/contains/the/manage.py/file
 3. $ monitor.py  
   
-For any questions or improvement advices, please contact me at  
+For any questions or improvement advice, please contact me at  
 yordan [at] 4web [dot] bg
 
 Disclaimer
